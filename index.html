@@ -236,6 +236,58 @@ body {
 .stat-orange .stat-value { color: var(--orange);}
 
 /* ============================================================
+   Consumable Trackers
+   ============================================================ */
+.trackers-section {
+  max-width: 1200px;
+  margin: 16px auto 0;
+  padding: 0 24px;
+}
+.trackers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+.tracker-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  min-height: 108px;
+}
+.tracker-ok { border-left-color: var(--green); }
+.tracker-soon { border-left-color: var(--orange); }
+.tracker-due { border-left-color: var(--red); }
+.tracker-missing { border-left-color: var(--text-muted); }
+.tracker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.tracker-name {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.tracker-value {
+  font-size: 1.05rem;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+.tracker-ok .tracker-value { color: var(--green); }
+.tracker-soon .tracker-value { color: var(--orange); }
+.tracker-due .tracker-value { color: var(--red); }
+.tracker-meta {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+/* ============================================================
    Charts
    ============================================================ */
 .charts-section {
@@ -417,6 +469,13 @@ body {
 .badge-更換  { background: var(--blue-bg);   color: var(--blue);   }
 .badge-改裝升級 { background: var(--purple-bg); color: var(--purple); }
 .badge-其他  { background: var(--bg-input);  color: var(--text-secondary); }
+.badge-status { background: var(--bg-input); color: var(--text-muted); }
+.record-status {
+  opacity: 0.72;
+}
+.record-status:hover {
+  opacity: 0.92;
+}
 
 .record-detail {
   font-size: 0.88rem;
@@ -633,8 +692,9 @@ body {
 @media (max-width: 600px) {
   .header-inner { padding: 12px 16px; align-items: flex-start; }
   .header-actions { flex-wrap: wrap; justify-content: flex-end; }
-  .stats-section, .charts-section, .filter-section, .records-section { padding: 0 16px; }
+  .stats-section, .trackers-section, .charts-section, .filter-section, .records-section { padding: 0 16px; }
   .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .trackers-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
   .stat-card { padding: 14px; }
   .filter-bar { flex-direction: column; align-items: stretch; }
   .record-item { grid-template-columns: 1fr; }
@@ -726,11 +786,19 @@ body {
       <div class="stat-card stat-orange">
         <div class="stat-icon">⛽</div>
         <div class="stat-content">
-          <div class="stat-value" id="statFuelAdditive">—</div>
+          <div class="stat-topline">
+            <div class="stat-value" id="statFuelAdditive">—</div>
+            <button class="btn btn-ghost btn-sm stat-action" id="btnAddFuelAdditive" type="button">已添加</button>
+          </div>
           <div class="stat-label" id="statFuelAdditiveLabel">汽油精追蹤</div>
         </div>
       </div>
     </div>
+  </section>
+
+  <!-- 耗材提醒區 -->
+  <section class="trackers-section">
+    <div class="trackers-grid" id="consumableTrackers"></div>
   </section>
 
   <!-- 圖表區 -->
@@ -870,6 +938,39 @@ body {
           <div class="modal-footer">
             <button type="button" class="btn btn-ghost" id="mileageCancelBtn">取消</button>
             <button type="submit" class="btn btn-primary">💾 更新里程</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 汽油精添加 Modal -->
+  <div id="fuelModal" class="modal-overlay" style="display:none;">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>記錄汽油精</h2>
+        <button class="modal-close" id="fuelModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="fuelForm">
+          <div class="form-grid">
+            <div class="form-group form-group-full">
+              <label class="form-label">里程 (km) <span class="required">*</span></label>
+              <input type="number" id="fuelMileageInput" class="form-input" min="0" step="1" required/>
+            </div>
+            <div class="form-group form-group-full">
+              <label class="form-label">費用 (NT$)</label>
+              <input type="number" id="fuelCostInput" class="form-input" min="0" step="1" placeholder="0"/>
+            </div>
+            <div class="form-group form-group-full">
+              <label class="form-label">備註</label>
+              <input type="text" id="fuelNoteInput" class="form-input" placeholder="例：加油時添加、品牌..."/>
+            </div>
+            <div class="form-message" id="fuelMessage"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" id="fuelCancelBtn">取消</button>
+            <button type="submit" class="btn btn-primary">💾 記錄添加</button>
           </div>
         </form>
       </div>
@@ -1151,6 +1252,15 @@ const RECORD_TEMPLATES = {
   }
 };
 
+const CONSUMABLE_RULES = [
+  { name: "機油保養", icon: "🛢", terms: ["機油"], intervalKm: 10000, dueKm: 12000 },
+  { name: "變速箱油", icon: "⚙", terms: ["變速箱油", "閥體油"], intervalKm: 40000, dueKm: 60000 },
+  { name: "輪胎", icon: "輪", terms: ["輪胎"], intervalKm: 40000, dueKm: 50000 },
+  { name: "電瓶", icon: "🔋", terms: ["電瓶"], intervalMonths: 36, dueMonths: 48 },
+  { name: "煞車油", icon: "制", terms: ["煞車油"], intervalMonths: 24, dueMonths: 36 },
+  { name: "冷氣濾網", icon: "❄", terms: ["冷氣濾網", "冷氣濾心"], intervalKm: 10000, dueKm: 15000 }
+];
+
 async function initData() {
   document.getElementById("recordsContainer").innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>正在從雲端同步資料...</p></div>';
   setSyncStatus("syncing", "同步中");
@@ -1239,6 +1349,10 @@ function formatCost(n) {
   if (!n) return "NT$ 0";
   return "NT$ " + n.toLocaleString("zh-TW");
 }
+function formatCompactCost(n) {
+  if (!n) return "0";
+  return n >= 10000 ? (n / 10000).toFixed(1) + " 萬" : n.toLocaleString("zh-TW");
+}
 function asNumber(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -1259,6 +1373,10 @@ function addMonths(date, months) {
   next.setMonth(next.getMonth() + months);
   return next;
 }
+function diffMonths(from, to = new Date()) {
+  if (!from) return 0;
+  return Math.max(0, (to.getFullYear() - from.getFullYear()) * 12 + to.getMonth() - from.getMonth());
+}
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, ch => ({
     "&": "&amp;",
@@ -1277,6 +1395,17 @@ function getMaxMileage(excludeIndex = -1) {
 function getCurrentMileage() {
   return getMaxMileage();
 }
+function isMileageUpdateRecord(r) {
+  return r && r.category === "其他" && r.detail === "目前里程更新";
+}
+function getServiceRecords() {
+  return records.filter(r => !isMileageUpdateRecord(r));
+}
+function recordMatchesTerms(r, terms) {
+  if (isMileageUpdateRecord(r)) return false;
+  const text = `${r.detail || ""} ${r.note || ""}`;
+  return terms.some(term => text.includes(term));
+}
 function getTodayString() {
   const d = new Date();
   const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -1293,34 +1422,36 @@ function getCategoryEmoji(cat) {
 // ============================================================
 function updateStats() {
   const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date));
+  const serviceRecords = getServiceRecords();
+  const sortedServiceRecords = [...serviceRecords].sort((a, b) => b.date.localeCompare(a.date));
   const today = new Date();
   const oneYearAgo = new Date(today);
   oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
-  document.getElementById("statTotalRecords").textContent = records.length;
+  document.getElementById("statTotalRecords").textContent = serviceRecords.length;
 
-  const total = records.reduce((s, r) => s + asNumber(r.cost), 0);
+  const total = serviceRecords.reduce((s, r) => s + asNumber(r.cost), 0);
   document.getElementById("statTotalCost").textContent = total > 0
-    ? (total / 10000).toFixed(1) + " 萬"
+    ? formatCompactCost(total)
     : "0";
 
   const maxMile = getCurrentMileage();
   document.getElementById("statCurrentMileage").textContent =
     maxMile > 0 ? maxMile.toLocaleString("zh-TW") : "—";
 
-  const lastMaint = sorted.find(r => r.category === "保養");
+  const lastMaint = sortedServiceRecords.find(r => r.category === "保養");
   document.getElementById("statLastMaintenance").textContent =
     lastMaint ? lastMaint.date.substring(0, 7) : "—";
 
-  const recentTotal = records.reduce((sum, r) => {
+  const recentTotal = serviceRecords.reduce((sum, r) => {
     const d = parseDate(r.date);
     return d && d >= oneYearAgo ? sum + asNumber(r.cost) : sum;
   }, 0);
   document.getElementById("statRecentCost").textContent = recentTotal > 0
-    ? (recentTotal / 10000).toFixed(1) + " 萬"
+    ? formatCompactCost(recentTotal)
     : "0";
 
-  const maintenanceCost = records
+  const maintenanceCost = serviceRecords
     .filter(r => r.category !== "改裝升級" && r.category !== "其他")
     .reduce((sum, r) => sum + asNumber(r.cost), 0);
   const mileageValues = records.map(r => Number(r.mileage)).filter(v => Number.isFinite(v) && v > 0);
@@ -1341,13 +1472,7 @@ function updateStats() {
 
   const fuelAdditiveEl = document.getElementById("statFuelAdditive");
   const fuelAdditiveLabel = document.getElementById("statFuelAdditiveLabel");
-  const lastFuelAdditive = sorted.find(r =>
-    r.detail !== "目前里程更新" &&
-    (
-      (r.detail || "").includes("汽油精") ||
-      (r.note || "").includes("汽油精")
-    )
-  );
+  const lastFuelAdditive = sorted.find(r => recordMatchesTerms(r, ["汽油精"]));
   const lastFuelMileage = lastFuelAdditive ? Number(lastFuelAdditive.mileage) : null;
   if (!lastFuelAdditive) {
     fuelAdditiveEl.textContent = "未記錄";
@@ -1371,6 +1496,98 @@ function updateStats() {
   }
 }
 
+function getLatestMatchingRecord(terms) {
+  return [...records]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .find(r => recordMatchesTerms(r, terms));
+}
+
+function buildTrackerState(rule) {
+  const currentMileage = getCurrentMileage();
+  const latest = getLatestMatchingRecord(rule.terms);
+  if (!latest) {
+    return {
+      status: "missing",
+      value: "未記錄",
+      meta: rule.intervalKm
+        ? `建議每 ${rule.intervalKm.toLocaleString("zh-TW")} km 檢查`
+        : `建議每 ${rule.intervalMonths} 個月檢查`
+    };
+  }
+
+  if (rule.intervalKm) {
+    const lastMileage = Number(latest.mileage);
+    if (!Number.isFinite(lastMileage) || lastMileage <= 0 || !currentMileage) {
+      return {
+        status: "missing",
+        value: "缺里程",
+        meta: latest.date ? `最近 ${latest.date}` : "最近紀錄缺少里程"
+      };
+    }
+    const usedKm = Math.max(currentMileage - lastMileage, 0);
+    if (usedKm >= rule.dueKm) {
+      return {
+        status: "due",
+        value: "該處理",
+        meta: `上次 ${lastMileage.toLocaleString("zh-TW")} km / 已跑 ${usedKm.toLocaleString("zh-TW")} km`
+      };
+    }
+    if (usedKm >= rule.intervalKm) {
+      return {
+        status: "soon",
+        value: "可安排",
+        meta: `上次 ${lastMileage.toLocaleString("zh-TW")} km / 已跑 ${usedKm.toLocaleString("zh-TW")} km`
+      };
+    }
+    return {
+      status: "ok",
+      value: "剩 " + (rule.intervalKm - usedKm).toLocaleString("zh-TW") + " km",
+      meta: `上次 ${lastMileage.toLocaleString("zh-TW")} km / 已跑 ${usedKm.toLocaleString("zh-TW")} km`
+    };
+  }
+
+  const latestDate = parseDate(latest.date);
+  if (!latestDate) {
+    return { status: "missing", value: "缺日期", meta: "最近紀錄缺少日期" };
+  }
+  const usedMonths = diffMonths(latestDate);
+  if (usedMonths >= rule.dueMonths) {
+    return {
+      status: "due",
+      value: "該處理",
+      meta: `上次 ${latest.date.substring(0, 7)} / 已過 ${usedMonths} 個月`
+    };
+  }
+  if (usedMonths >= rule.intervalMonths) {
+    return {
+      status: "soon",
+      value: "可安排",
+      meta: `上次 ${latest.date.substring(0, 7)} / 已過 ${usedMonths} 個月`
+    };
+  }
+  return {
+    status: "ok",
+    value: "剩 " + (rule.intervalMonths - usedMonths) + " 個月",
+    meta: `上次 ${latest.date.substring(0, 7)} / 已過 ${usedMonths} 個月`
+  };
+}
+
+function renderConsumableTrackers() {
+  const container = document.getElementById("consumableTrackers");
+  if (!container) return;
+  container.innerHTML = CONSUMABLE_RULES.map(rule => {
+    const state = buildTrackerState(rule);
+    return `
+      <div class="tracker-card tracker-${state.status}">
+        <div class="tracker-head">
+          <div class="tracker-name">${rule.icon} ${escapeHtml(rule.name)}</div>
+        </div>
+        <div class="tracker-value">${escapeHtml(state.value)}</div>
+        <div class="tracker-meta">${escapeHtml(state.meta)}</div>
+      </div>`;
+  }).join("");
+}
+
 // ============================================================
 // 年份篩選 Select
 // ============================================================
@@ -1388,14 +1605,15 @@ function populateYearFilter() {
 }
 
 function updateFilterPills() {
-  const counts = records.reduce((map, r) => {
+  const serviceRecords = getServiceRecords();
+  const counts = serviceRecords.reduce((map, r) => {
     map[r.category] = (map[r.category] || 0) + 1;
     return map;
   }, {});
 
   document.querySelectorAll("#filterPills .pill").forEach(btn => {
     const cat = btn.dataset.cat;
-    const count = cat === "全部" ? records.length : (counts[cat] || 0);
+    const count = cat === "全部" ? serviceRecords.length : (counts[cat] || 0);
     btn.innerHTML = `${escapeHtml(cat)}<span class="pill-count">${count}</span>`;
   });
 }
@@ -1403,14 +1621,17 @@ function updateFilterPills() {
 function updateFilterSummary(filtered) {
   const el = document.getElementById("filterSummary");
   if (!el) return;
-  const total = filtered.reduce((sum, r) => sum + asNumber(r.cost), 0);
+  const filteredServiceRecords = filtered.filter(r => !isMileageUpdateRecord(r));
+  const total = filteredServiceRecords.reduce((sum, r) => sum + asNumber(r.cost), 0);
   const parts = [];
   if (currentFilter !== "全部") parts.push(currentFilter);
   if (currentYear) parts.push(currentYear + " 年");
   if (currentSearch) parts.push("搜尋「" + currentSearch + "」");
 
   const scope = parts.length ? "（" + parts.join(" / ") + "）" : "";
-  el.textContent = `顯示 ${filtered.length} / ${records.length} 筆${scope}，合計 ${formatCost(total)}`;
+  const statusCount = filtered.length - filteredServiceRecords.length;
+  const statusText = statusCount ? `，另有 ${statusCount} 筆里程狀態` : "";
+  el.textContent = `顯示 ${filteredServiceRecords.length} / ${getServiceRecords().length} 筆${scope}${statusText}，合計 ${formatCost(total)}`;
 }
 
 // ============================================================
@@ -1424,7 +1645,7 @@ function buildCharts() {
 function buildCostChart() {
   // 按年度加總費用
   const yearMap = {};
-  records.forEach(r => {
+  getServiceRecords().forEach(r => {
     const y = getYear(r.date);
     if (!y) return;
     yearMap[y] = (yearMap[y] || 0) + asNumber(r.cost);
@@ -1494,7 +1715,7 @@ function buildCategoryChart() {
     改裝升級: "#bc8cff", 其他: "#484f58"
   };
   const catMap = {};
-  records.forEach(r => {
+  getServiceRecords().forEach(r => {
     const cost = asNumber(r.cost);
     if (!cost) return;
     catMap[r.category] = (catMap[r.category] || 0) + cost;
@@ -1602,16 +1823,18 @@ function renderRecords() {
   filtered.forEach(r => {
     // 在原始 records 中找出真實 index
     const origIdx = records.indexOf(r);
+    const isStatus = isMileageUpdateRecord(r);
     const year = getYear(r.date);
     const monthDay = r.date ? r.date.substring(5) : "";
     const emoji = getCategoryEmoji(r.category);
-    const safeCategory = escapeHtml(r.category);
+    const safeCategory = escapeHtml(isStatus ? "里程狀態" : r.category);
+    const badgeClass = isStatus ? "badge-status" : "badge-" + escapeHtml(r.category);
     const mileageValue = asNumber(r.mileage);
     const costValue = asNumber(r.cost);
     const noteHtml = r.note ? `<div class="record-note">📝 ${escapeHtml(r.note)}</div>` : "";
 
     html += `
-    <div class="record-item" data-idx="${origIdx}">
+    <div class="record-item ${isStatus ? "record-status" : ""}" data-idx="${origIdx}">
       <div class="record-date record-field">
         <span class="mobile-label">日期</span>
         <span class="field-value"><strong>${monthDay}</strong>${year}</span>
@@ -1622,7 +1845,7 @@ function renderRecords() {
       </div>
       <div class="record-field">
         <span class="mobile-label">類別</span>
-        <span class="record-badge badge-${safeCategory}">${emoji} ${safeCategory}</span>
+        <span class="record-badge ${badgeClass}">${isStatus ? "📍" : emoji} ${safeCategory}</span>
       </div>
       <div class="record-detail record-field">
         <span class="mobile-label">詳細內容</span>
@@ -1696,7 +1919,7 @@ function openAddModal() {
   document.getElementById("modalTitle").textContent = "新增保養紀錄";
   document.getElementById("editIndex").value = "-1";
   document.getElementById("recordForm").reset();
-  document.getElementById("formDate").value = new Date().toISOString().substring(0, 10);
+  document.getElementById("formDate").value = getTodayString();
   clearFormMessage();
   updateMileageHint(-1);
   document.getElementById("modal").style.display = "flex";
@@ -1735,6 +1958,18 @@ function clearMileageMessage() {
   el.textContent = "";
 }
 
+function showFuelMessage(type, text) {
+  const el = document.getElementById("fuelMessage");
+  el.className = "form-message form-message-" + type;
+  el.textContent = text;
+}
+
+function clearFuelMessage() {
+  const el = document.getElementById("fuelMessage");
+  el.className = "form-message";
+  el.textContent = "";
+}
+
 function openMileageModal() {
   const currentMileage = getCurrentMileage();
   document.getElementById("currentMileageInput").value = currentMileage || "";
@@ -1748,6 +1983,20 @@ function openMileageModal() {
 function closeMileageModal() {
   document.getElementById("mileageModal").style.display = "none";
   clearMileageMessage();
+}
+
+function openFuelModal() {
+  const currentMileage = getCurrentMileage();
+  document.getElementById("fuelMileageInput").value = currentMileage || "";
+  document.getElementById("fuelCostInput").value = "";
+  document.getElementById("fuelNoteInput").value = "";
+  clearFuelMessage();
+  document.getElementById("fuelModal").style.display = "flex";
+}
+
+function closeFuelModal() {
+  document.getElementById("fuelModal").style.display = "none";
+  clearFuelMessage();
 }
 
 function handleMileageSubmit(e) {
@@ -1788,6 +2037,40 @@ function handleMileageSubmit(e) {
 
   saveRecords(records);
   closeMileageModal();
+  refresh();
+}
+
+function handleFuelSubmit(e) {
+  e.preventDefault();
+  const mileage = parseInt(document.getElementById("fuelMileageInput").value);
+  const cost = parseInt(document.getElementById("fuelCostInput").value) || 0;
+  const note = document.getElementById("fuelNoteInput").value.trim();
+  const currentMileage = getCurrentMileage();
+
+  if (!Number.isFinite(mileage) || mileage <= 0) {
+    showFuelMessage("error", "請輸入有效的添加里程。");
+    return;
+  }
+  if (currentMileage > 0 && mileage > currentMileage) {
+    showFuelMessage("error", "添加里程不能高於目前里程 " + currentMileage.toLocaleString("zh-TW") + " km。");
+    return;
+  }
+  if (cost < 0) {
+    showFuelMessage("error", "費用不能是負數。");
+    return;
+  }
+
+  records.push({
+    date: getTodayString(),
+    mileage,
+    category: "其他",
+    detail: "汽油精",
+    cost,
+    note: note || "定期添加維護"
+  });
+
+  saveRecords(records);
+  closeFuelModal();
   refresh();
 }
 
@@ -1893,6 +2176,7 @@ function exportCSV() {
 // ============================================================
 function refresh() {
   updateStats();
+  renderConsumableTrackers();
   populateYearFilter();
   updateFilterPills();
   buildCharts();
@@ -1909,6 +2193,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 新增按鈕
   document.getElementById("btnAddRecord").addEventListener("click", openAddModal);
   document.getElementById("btnUpdateMileage").addEventListener("click", openMileageModal);
+  document.getElementById("btnAddFuelAdditive").addEventListener("click", openFuelModal);
 
   // 匯出
   document.getElementById("btnExport").addEventListener("click", exportCSV);
@@ -1941,6 +2226,17 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById("mileageForm").addEventListener("submit", handleMileageSubmit);
   document.getElementById("currentMileageInput").addEventListener("input", clearMileageMessage);
+
+  // 汽油精添加
+  document.getElementById("fuelModalClose").addEventListener("click", closeFuelModal);
+  document.getElementById("fuelCancelBtn").addEventListener("click", closeFuelModal);
+  document.getElementById("fuelModal").addEventListener("click", e => {
+    if (e.target === document.getElementById("fuelModal")) closeFuelModal();
+  });
+  document.getElementById("fuelForm").addEventListener("submit", handleFuelSubmit);
+  ["fuelMileageInput", "fuelCostInput", "fuelNoteInput"].forEach(id => {
+    document.getElementById(id).addEventListener("input", clearFuelMessage);
+  });
 
   // 刪除 Modal
   document.getElementById("deleteCancelBtn").addEventListener("click", closeDeleteModal);
