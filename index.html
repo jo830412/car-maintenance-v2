@@ -207,6 +207,20 @@ body {
   letter-spacing: -0.02em;
   line-height: 1.1;
 }
+.stat-content {
+  flex: 1;
+  min-width: 0;
+}
+.stat-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.stat-action {
+  padding: 3px 8px;
+  font-size: 0.72rem;
+}
 .stat-label {
   font-size: 0.78rem;
   color: var(--text-secondary);
@@ -674,7 +688,10 @@ body {
       <div class="stat-card stat-purple">
         <div class="stat-icon">📍</div>
         <div class="stat-content">
-          <div class="stat-value" id="statCurrentMileage">—</div>
+          <div class="stat-topline">
+            <div class="stat-value" id="statCurrentMileage">—</div>
+            <button class="btn btn-ghost btn-sm stat-action" id="btnUpdateMileage" type="button">更新</button>
+          </div>
           <div class="stat-label">目前里程 (km)</div>
         </div>
       </div>
@@ -827,6 +844,32 @@ body {
           <div class="modal-footer">
             <button type="button" class="btn btn-ghost" id="btnCancel">取消</button>
             <button type="submit" class="btn btn-primary">💾 儲存紀錄</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 目前里程更新 Modal -->
+  <div id="mileageModal" class="modal-overlay" style="display:none;">
+    <div class="modal modal-sm">
+      <div class="modal-header">
+        <h2>更新目前里程</h2>
+        <button class="modal-close" id="mileageModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="mileageForm">
+          <div class="form-grid">
+            <div class="form-group form-group-full">
+              <label class="form-label">目前里程 (km) <span class="required">*</span></label>
+              <input type="number" id="currentMileageInput" class="form-input" min="0" step="1" placeholder="例：123456" required/>
+              <div class="form-help" id="currentMileageHint"></div>
+            </div>
+            <div class="form-message" id="mileageMessage"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-ghost" id="mileageCancelBtn">取消</button>
+            <button type="submit" class="btn btn-primary">💾 更新里程</button>
           </div>
         </form>
       </div>
@@ -1230,6 +1273,12 @@ function getMaxMileage(excludeIndex = -1) {
     .map((r, i) => i === excludeIndex ? null : Number(r.mileage))
     .filter(v => Number.isFinite(v) && v > 0);
   return values.length ? Math.max(...values) : 0;
+}
+function getTodayString() {
+  const d = new Date();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
 }
 function getCategoryEmoji(cat) {
   const map = { 保養:"🔧", 維修:"🚨", 更換:"🔄", 改裝升級:"⚡", 其他:"📌" };
@@ -1665,6 +1714,74 @@ function closeModal() {
   clearFormMessage();
 }
 
+function showMileageMessage(type, text) {
+  const el = document.getElementById("mileageMessage");
+  el.className = "form-message form-message-" + type;
+  el.textContent = text;
+}
+
+function clearMileageMessage() {
+  const el = document.getElementById("mileageMessage");
+  el.className = "form-message";
+  el.textContent = "";
+}
+
+function openMileageModal() {
+  const currentMileage = getMaxMileage();
+  document.getElementById("currentMileageInput").value = currentMileage || "";
+  document.getElementById("currentMileageHint").textContent = currentMileage > 0
+    ? "目前紀錄最高里程是 " + currentMileage.toLocaleString("zh-TW") + " km。"
+    : "";
+  clearMileageMessage();
+  document.getElementById("mileageModal").style.display = "flex";
+}
+
+function closeMileageModal() {
+  document.getElementById("mileageModal").style.display = "none";
+  clearMileageMessage();
+}
+
+function handleMileageSubmit(e) {
+  e.preventDefault();
+  const input = document.getElementById("currentMileageInput");
+  const mileage = parseInt(input.value);
+  const currentMileage = getMaxMileage();
+
+  if (!Number.isFinite(mileage) || mileage <= 0) {
+    showMileageMessage("error", "請輸入有效的目前里程。");
+    return;
+  }
+  if (currentMileage > 0 && mileage < currentMileage) {
+    showMileageMessage("error", "目前里程不能低於既有最高里程 " + currentMileage.toLocaleString("zh-TW") + " km。");
+    return;
+  }
+
+  const today = getTodayString();
+  const existingTodayIndex = records.findIndex(r =>
+    r.date === today &&
+    r.category === "其他" &&
+    r.detail === "目前里程更新"
+  );
+  const rec = {
+    date: today,
+    mileage,
+    category: "其他",
+    detail: "目前里程更新",
+    cost: 0,
+    note: "用於儀表板與汽油精追蹤"
+  };
+
+  if (existingTodayIndex >= 0) {
+    records[existingTodayIndex] = rec;
+  } else {
+    records.push(rec);
+  }
+
+  saveRecords(records);
+  closeMileageModal();
+  refresh();
+}
+
 function handleFormSubmit(e) {
   e.preventDefault();
   const form = document.getElementById("recordForm");
@@ -1782,6 +1899,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 新增按鈕
   document.getElementById("btnAddRecord").addEventListener("click", openAddModal);
+  document.getElementById("btnUpdateMileage").addEventListener("click", openMileageModal);
 
   // 匯出
   document.getElementById("btnExport").addEventListener("click", exportCSV);
@@ -1805,6 +1923,15 @@ document.addEventListener("DOMContentLoaded", () => {
       if (id === "formMileage") updateMileageHint();
     });
   });
+
+  // 目前里程更新
+  document.getElementById("mileageModalClose").addEventListener("click", closeMileageModal);
+  document.getElementById("mileageCancelBtn").addEventListener("click", closeMileageModal);
+  document.getElementById("mileageModal").addEventListener("click", e => {
+    if (e.target === document.getElementById("mileageModal")) closeMileageModal();
+  });
+  document.getElementById("mileageForm").addEventListener("submit", handleMileageSubmit);
+  document.getElementById("currentMileageInput").addEventListener("input", clearMileageMessage);
 
   // 刪除 Modal
   document.getElementById("deleteCancelBtn").addEventListener("click", closeDeleteModal);
