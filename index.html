@@ -1342,8 +1342,11 @@ function updateStats() {
   const fuelAdditiveEl = document.getElementById("statFuelAdditive");
   const fuelAdditiveLabel = document.getElementById("statFuelAdditiveLabel");
   const lastFuelAdditive = sorted.find(r =>
-    (r.detail || "").includes("汽油精") ||
-    (r.note || "").includes("汽油精")
+    r.detail !== "目前里程更新" &&
+    (
+      (r.detail || "").includes("汽油精") ||
+      (r.note || "").includes("汽油精")
+    )
   );
   const lastFuelMileage = lastFuelAdditive ? Number(lastFuelAdditive.mileage) : null;
   if (!lastFuelAdditive) {
@@ -1774,7 +1777,7 @@ function handleMileageSubmit(e) {
     category: "其他",
     detail: "目前里程更新",
     cost: 0,
-    note: "用於儀表板與汽油精追蹤"
+    note: "用於儀表板里程計算"
   };
 
   if (existingTodayIndex >= 0) {
