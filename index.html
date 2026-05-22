@@ -1274,6 +1274,9 @@ function getMaxMileage(excludeIndex = -1) {
     .filter(v => Number.isFinite(v) && v > 0);
   return values.length ? Math.max(...values) : 0;
 }
+function getCurrentMileage() {
+  return getMaxMileage();
+}
 function getTodayString() {
   const d = new Date();
   const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -1301,7 +1304,7 @@ function updateStats() {
     ? (total / 10000).toFixed(1) + " 萬"
     : "0";
 
-  const maxMile = Math.max(...records.map(r => Number(r.mileage)).filter(v => Number.isFinite(v) && v > 0), 0);
+  const maxMile = getCurrentMileage();
   document.getElementById("statCurrentMileage").textContent =
     maxMile > 0 ? maxMile.toLocaleString("zh-TW") : "—";
 
@@ -1355,7 +1358,10 @@ function updateStats() {
     } else {
       fuelAdditiveEl.textContent = "剩 " + (3000 - usedKm).toLocaleString("zh-TW") + " km";
     }
-    fuelAdditiveLabel.textContent = "上次 " + lastFuelMileage.toLocaleString("zh-TW") + " km";
+    fuelAdditiveLabel.textContent =
+      "目前 " + maxMile.toLocaleString("zh-TW") +
+      " / 上次 " + lastFuelMileage.toLocaleString("zh-TW") +
+      " / 已跑 " + usedKm.toLocaleString("zh-TW") + " km";
   } else {
     fuelAdditiveEl.textContent = lastFuelAdditive.date ? lastFuelAdditive.date.substring(0, 7) : "已記錄";
     fuelAdditiveLabel.textContent = "缺少上次添加里程";
@@ -1727,7 +1733,7 @@ function clearMileageMessage() {
 }
 
 function openMileageModal() {
-  const currentMileage = getMaxMileage();
+  const currentMileage = getCurrentMileage();
   document.getElementById("currentMileageInput").value = currentMileage || "";
   document.getElementById("currentMileageHint").textContent = currentMileage > 0
     ? "目前紀錄最高里程是 " + currentMileage.toLocaleString("zh-TW") + " km。"
@@ -1745,7 +1751,7 @@ function handleMileageSubmit(e) {
   e.preventDefault();
   const input = document.getElementById("currentMileageInput");
   const mileage = parseInt(input.value);
-  const currentMileage = getMaxMileage();
+  const currentMileage = getCurrentMileage();
 
   if (!Number.isFinite(mileage) || mileage <= 0) {
     showMileageMessage("error", "請輸入有效的目前里程。");
